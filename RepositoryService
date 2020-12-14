@@ -1,0 +1,421 @@
+/* Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.activiti.engine;
+
+import java.io.InputStream;
+import java.util.Date;
+import java.util.List;
+
+import org.activiti.bpmn.model.BpmnModel;
+import org.activiti.engine.repository.DeploymentBuilder;
+import org.activiti.engine.repository.DeploymentQuery;
+import org.activiti.engine.repository.DiagramLayout;
+import org.activiti.engine.repository.Model;
+import org.activiti.engine.repository.ModelQuery;
+import org.activiti.engine.repository.NativeDeploymentQuery;
+import org.activiti.engine.repository.NativeModelQuery;
+import org.activiti.engine.repository.NativeProcessDefinitionQuery;
+import org.activiti.engine.repository.ProcessDefinition;
+import org.activiti.engine.repository.ProcessDefinitionQuery;
+import org.activiti.engine.task.IdentityLink;
+import org.activiti.validation.ValidationError;
+
+/** 提供对流程定义和部署存储库的访问的服务.
+ * 
+ */
+public interface RepositoryService {
+
+  /** 创建新的部署 */
+  DeploymentBuilder createDeployment();
+  
+  /** 
+   * 删除给定的部署。
+	*@param 部署的 deploymentId id，不能为空。
+	*如果仍有运行时或历史流程，@throwns RuntimeException
+	*act_re_deployment（流程部署表）表
+	*
+   */
+  void deleteDeployment(String deploymentId);
+  
+  /**
+  *删除给定的部署并级联删除到流程实例，
+  *历史流程实例和jobs。
+  *@param 部署的 deploymentId id，不能为空。
+  *@deprecated  @不推荐使用{@link#deleteDeployment（String，boolean）}。该方法可从5.3中删除。
+  *act_re_deployment（流程部署表）表
+  */
+  void deleteDeploymentCascade(String deploymentId);
+
+  /**
+   **删除给定的部署并级联删除到流程实例，
+   *历史流程实例和作业jobs。
+   *@param 部署的 deploymentId id，不能为空。
+   *@param cascade是否级联删除
+   *act_re_deployment（流程部署表）表及相关级联表
+   */
+  void deleteDeployment(String deploymentId, boolean cascade);
+  
+  /**
+	*设置部署的的类别。
+	*可以按类别查询部署：请参见{@link DeploymentQuery#deploymentCategory（String）}。
+	*如果找不到具有提供的id的部署，则@throws ActivitiObjectNotFoundException。
+	*category对应act_re_deployment（流程部署表）表中的CATEGORY_(流程类别字段)
+   */
+  void setDeploymentCategory(String deploymentId, String category);
+
+  /**
+    *检索给定部署的部署资源列表，
+	*按字母顺序排列。
+	*部署的@param deploymentId id，不能为空。
+	*act_re_deployment（流程部署表）
+   */
+  List<String> getDeploymentResourceNames(String deploymentId);
+  
+  /**
+	*通过字节流提供对部署资源的访问。
+	*部署的@param deploymentId id，不能为空。
+	*资源的@param resourceName名称，不能为空。
+	*当给定部署中不存在资源或不存在部署时，@将引发ActivityObjectNotFoundException
+	*对于给定的deploymentId。
+	*/
+  InputStream getResourceAsStream(String deploymentId, String resourceName);
+  
+  /**
+   * 
+   *实验功能！
+	*更改部署的占有者标识符以匹配给定的占有者标识符。
+	*此更改将级联到任何相关实体：
+	*-与部署相关的流程定义
+	*-与这些流程定义相关的流程实例
+	*-与这些流程实例相关的执行
+	*-与这些流程实例相关的任务
+	*-与流程定义和流程实例相关的作业
+	*此方法可用于没有占有者标识符集的情况
+	*在部署或之前的那些实体上。
+	*此方法可用于从
+	*部署和相关实体（简单地传递null）。
+	*重要提示：在执行占有者标识符更改时，不会执行乐观锁定！
+	*这是一个实验性的特性，主要是因为它不能工作
+	*在集群环境中正常工作，无需特别注意：
+	*假设某个流程实例正在运行。过程定义在
+	*流程定义缓存。在继续流程时创建任务或作业时
+	*实例中，将查询流程定义缓存以获取流程定义
+	*并从中获取占有者标识符。因为它是缓存的，所以它不会是新的占有者标识符。
+	*此方法确实清除此engineinstance的缓存，但不会将其清除
+	*在群集中的其他节点上（除非使用共享流程定义缓存）。
+	*@param deploymentId要更改其占有者标识符的部署的id。
+	*@param newTenantId新占有者标识符。
+   */
+  void changeDeploymentTenantId(String deploymentId, String newTenantId);
+
+  /** 查询流程定义. 
+   * 表act_re_procdef（流程定义表）
+   */
+  ProcessDefinitionQuery createProcessDefinitionQuery();
+
+  /**
+   * Returns a new {@link org.activiti.engine.query.NativeQuery} for process definitions.
+   * 返回一个新的{@linkorg.activiti.engine.query.NativeQuery}对于流程定义的一个程序对象
+   */
+  NativeProcessDefinitionQuery createNativeProcessDefinitionQuery();
+  
+  /** 查询部署。 */
+  DeploymentQuery createDeploymentQuery();
+
+  /**
+   * Returns a new {@link org.activiti.engine.query.NativeQuery} for deployment.
+   * 返回一个新的{@linkorg.activiti.engine.query.NativeQuery}用于部署
+   */
+  NativeDeploymentQuery createNativeDeploymentQuery();
+  
+  /**
+    *挂起具有给定id的流程定义。
+	*如果流程定义处于挂起状态，则无法启动新的流程实例
+	*基于流程定义。
+	*<strong>注意：流程定义的所有流程实例仍将处于活动状态（即没有暂停）！</strong>
+	*如果找不到这样的processDefinition，则@throws ActivitiObjectNotFoundException
+	*如果流程定义已处于挂起状态，则@throws ActivitiException。
+	*
+   */
+  void suspendProcessDefinitionById(String processDefinitionId);
+
+  /**
+   *挂起具有给定id的流程定义。
+	*如果流程定义处于挂起状态，则无法启动新的流程实例
+	*基于流程定义。
+	*@param suspendProcessInstances如果为true，则为提供的流程定义的所有流程实例也会被暂停。
+	*@param suspensionDate流程定义将被挂起的日期。如果为空，则流程定义立即挂起。
+	*注意：任务执行者需要激活才能使用此功能！
+	*如果找不到这样的processDefinition，则@throws ActivitiObjectNotFoundException。
+    *如果流程定义已处于挂起状态，则@throws ActivitiException。
+    **表act_re_procdef（流程定义表）
+   */
+  void suspendProcessDefinitionById(String processDefinitionId, boolean suspendProcessInstances, Date suspensionDate);
+  
+  /**
+   *使用给定的key（=bpmn20.xml文件中的id）挂起<strong>所有</strong>流程定义。
+	*如果流程定义处于挂起状态，则无法启动新的流程实例
+	*基于流程定义。
+	*<strong>注意：流程定义的所有流程实例仍将处于活动状态（即没有暂停）！</strong>
+	*如果找不到这样的processDefinition，则@throws ActivitiObjectNotFoundException
+	*如果流程定义已处于挂起状态，则@throws ActivitiException。
+	*表act_re_procdef（流程定义表）
+   */
+  void suspendProcessDefinitionByKey(String processDefinitionKey);
+  
+  /**
+	*使用给定的key（=bpmn20.xml文件中的id）挂起<strong>所有</strong>流程定义。
+	*如果流程定义处于挂起状态，则无法启动新的流程实例
+	*基于流程定义。
+	*@param suspendProcessInstances如果为true，则为提供的流程定义的所有流程实例也会被暂停。
+	*@param suspensionDate流程定义将被挂起的日期。如果为空，则流程定义立即挂起。
+	*注意：任务执行者需要激活才能使用此功能！
+	*如果找不到这样的processDefinition，则@throws ActivitiObjectNotFoundException
+	*如果流程定义已处于挂起状态，则@throws ActivitiException。
+	**表act_re_procdef（流程定义表）
+   */
+  void suspendProcessDefinitionByKey(String processDefinitionKey, boolean suspendProcessInstances, Date suspensionDate);
+  
+  /**
+   * Similar to {@link #suspendProcessDefinitionByKey(String)}, but only applicable for the given tenant identifier.
+   * 与{@link#suspendProcessDefinitionByKey（String）}（上一个方法）类似，但仅适用于给定的占有者标识符。
+   * *表act_re_procdef（流程定义表）
+   */
+  void suspendProcessDefinitionByKey(String processDefinitionKey, String tenantId);
+  
+  /**
+   * Similar to {@link #suspendProcessDefinitionByKey(String, boolean, Date)}, but only applicable for the given tenant identifier.
+   * 类似于{@link#suspendProcessDefinitionByKey（String，boolean，Date）}，但仅适用于给定的占有者标识符。
+   * *表act_re_procdef（流程定义表）
+   */
+  void suspendProcessDefinitionByKey(String processDefinitionKey, boolean suspendProcessInstances, Date suspensionDate, String tenantId);
+  
+  /**
+   *使用给定的id激活流程定义。
+   *如果找不到此类processDefinition或流程定义已处于活动状态，则@throws ActivityObjectNotFoundException。
+   *表act_re_procdef（流程定义表）
+   */
+  void activateProcessDefinitionById(String processDefinitionId);
+  
+  /**
+   * 使用给定的id激活流程定义。
+	*@param activation激活流程定义的日期。如果为空，则流程定义立即激活。
+	*注意：任务执行者需要激活才能使用此功能！
+	*如果找不到这样的processDefinition，则@throws ActivitiObjectNotFoundException。
+	*如果流程定义已处于活动状态，则@throws ActivitiException。
+	*表act_re_procdef（流程定义表）
+   */
+  void activateProcessDefinitionById(String processDefinitionId, boolean activateProcessInstances, Date activationDate);
+  
+  /**
+   * 使用给定的键（=bpmn20.xml文件中的id）激活流程定义。
+	*如果找不到这样的processDefinition，则@throws ActivitiObjectNotFoundException。
+	*如果流程定义已处于活动状态，则@throws ActivitiException。
+	*表act_re_procdef（流程定义表）
+   */
+  void activateProcessDefinitionByKey(String processDefinitionKey);
+  
+  /**
+	*使用给定的键（=bpmn20.xml文件中的id）激活流程定义。
+	*@param activation激活流程定义的日期。如果为空，则流程定义立即激活。
+	*注意：作业执行者需要激活才能使用此功能！
+	*如果找不到这样的processDefinition，则@throws ActivitiObjectNotFoundException。
+	*如果流程定义已处于活动状态，则@throws ActivitiException。
+   */
+  void activateProcessDefinitionByKey(String processDefinitionKey, boolean activateProcessInstances,  Date activationDate);
+  
+  /**
+   * 使用给定的键（=bpmn20.xml文件中的id）激活流程定义。
+   * Similar to {@link #activateProcessDefinitionByKey(String)}, but only applicable for the given tenant identifier. 
+   * 与{@link#activateProcessDefinitionByKey（String）}类似，但仅适用于给定的占有者标识符。
+   * @param tenantId 对应表中的TENANT_ID_字段
+   */
+  void activateProcessDefinitionByKey(String processDefinitionKey, String tenantId);
+  
+  /**
+   * 使用给定的键（=bpmn20.xml文件中的id）激活流程定义。
+   * Similar to {@link #activateProcessDefinitionByKey(String, boolean, Date)}, but only applicable for the given tenant identifier. 
+   * 类似于{@link#activateProcessDefinitionByKey（String，boolean，Date）}，但仅适用于给定的租户标识符。
+   */
+  void activateProcessDefinitionByKey(String processDefinitionKey, boolean activateProcessInstances,  Date activationDate, String tenantId);
+  
+  /**
+   * 设置流程定义的类别。act_re_procdef（流程定义表）
+	*可以按类别查询流程定义：请参见{@link ProcessDefinitionQuery#processDefinitionCategory（String）}。
+	*如果找不到具有提供的id的流程定义，则@throws ActivitiObjectNotFoundException。
+  */
+  void setProcessDefinitionCategory(String processDefinitionId, String category);
+
+  /**
+   *允许访问已部署的流程模型，例如，BPMN 2.0 XML文件，
+	*通过字节流。
+	*@param流程定义ID{@link ProcessDefinition}的id不能为空。
+	*当流程模型不存在时。引发ActivityObjectNotFoundException
+	*
+   */
+  InputStream getProcessModel(String processDefinitionId);
+
+  /**
+    *通过一个字节流。
+	*@param 流程定义ID
+	*{@link ProcessDefinition}的id不能为空。
+	*当{@link ProcessDefinition}的关系图资源名称为null时，@返回null。
+	*当流程图不存在时 引发ActivityObjectNotFoundException
+   */
+  InputStream getProcessDiagram(String processDefinitionId);
+  
+  /**
+   * Returns the {@link ProcessDefinition} including all BPMN information like additional 
+   * Properties (e.g. documentation).
+   * 返回{@link ProcessDefinition}，包括所有BPMN信息，如附加的属性（如文件）
+   */
+  ProcessDefinition getProcessDefinition(String processDefinitionId);  
+  
+  /**
+   * 返回与流程定义对应的{@link BpmnModel}
+	*提供的流程定义id。{@link BpmnModel}是pojo版本
+	*和BPMN2.0XML的关系，并可用于内省流程定义
+   */
+  BpmnModel getBpmnModel(String processDefinitionId);
+  
+  /**
+   * 检查流程定义是否已挂起.
+   */
+  boolean isProcessDefinitionSuspended(String processDefinitionId);
+
+  /**
+   	*提供流程图中元素的位置和尺寸，如
+	*由{@link RepositoryService\getProcessDiagram（String）}提供。
+	*此方法需要部署流程模型和图表映像。
+	*{@link ProcessDefinition}的@param processDefinitionId id不能为空。
+	*@return Map，过程元素id为键，位置和维度为值。
+	*@return null当流程图的输入流为null时。
+	*当流程模型或图表不存在时，@引发ActivityObjectNotFoundException。
+   */
+  DiagramLayout getProcessDiagramLayout(String processDefinitionId);
+  
+  /**
+   * Creates a new model. The model is transient and must be saved using 
+   * {@link #saveModel(Model)}.
+   * 创建新模型。模型是瞬态的，必须保存使用
+   * act_re_model（模型表）
+   */
+  Model newModel();
+
+  /**
+   * 保存模型。如果模型已经存在，则更新模型
+	*否则将创建一个新模型。
+	*要保存的@param model model，不能为空
+	* act_re_model（模型表）
+   */
+  void saveModel(Model model);
+
+  /**
+   * 删除模型
+   *要删除的模型的@param modelId id，不能为空。当id被传递时
+   *对于不存在的模型，将忽略此操作。
+   * act_re_model（模型表）
+   */
+  void deleteModel(String modelId);
+  
+  /**
+   *保存模型的模型编辑器资源
+   */
+  void addModelEditorSource(String modelId, byte[] bytes);
+  
+  /**
+   * 为模型额外保存模型编辑器资源
+	*要删除的模型的@param modelId id，不能为空。当id被传递时
+	*对于不存在的模型，将忽略此操作。
+   */
+  void addModelEditorSourceExtra(String modelId, byte[] bytes);
+  
+  /** 查询模型. */
+  ModelQuery createModelQuery();
+
+  /**
+   * 返回一个新的{@linkorg.activiti.engine.query.NativeQuery}对于流程定义.
+   */
+  NativeModelQuery createNativeModelQuery();
+  
+  /**
+   * 返回{@link Model}
+   *@param modelId模型的id
+   */
+  Model getModel(String modelId);
+  
+  /**
+   *以字节数组的形式返回模型编辑器源
+   *@param modelId模型的id
+   */
+  byte[] getModelEditorSource(String modelId);
+  
+  /**
+   *以字节数组的形式返回额外的模型编辑器源代码
+   *@param modelId模型的id
+   */
+  byte[] getModelEditorSourceExtra(String modelId);
+  
+  /**
+   * 为流程定义授权候选用户。
+	*流程定义的@param processDefinitionId id，不能为空。
+	*参与用户的@param userId id，不能为空。
+	*当流程定义或用户不存在时，@引发ActivityObjectNotFoundException。
+   */
+  void addCandidateStarterUser(String processDefinitionId, String userId);
+  
+  /**
+   * 为流程定义授权候选组。
+	*流程定义的@param processDefinitionId id，不能为空。
+	*参与组的@param groupId id，不能为空。
+	*当流程定义或组不存在时，@引发ActivityObjectNotFoundException。
+   */
+  void addCandidateStarterGroup(String processDefinitionId, String groupId);
+  
+  /**
+   * 删除流程定义的候选用户的授权。
+	*流程定义的@param processDefinitionId id，不能为空。
+	*参与用户的@param userId id，不能为空。
+	*当流程定义或用户不存在时，@引发ActivityObjectNotFoundException。
+   */
+  void deleteCandidateStarterUser(String processDefinitionId, String userId);
+  
+  /**
+   * 删除流程定义的候选组的授权。
+	*流程定义的@param processDefinitionId id，不能为空。
+	*参与组的@param groupId id，不能为空。
+	*当流程定义或组不存在时，@引发ActivityObjectNotFoundException。
+   */
+  void deleteCandidateStarterGroup(String processDefinitionId, String groupId);
+
+  /**
+   * 检索与给定进程定义关联的{@link IdentityLink}。
+	*这样的{@link IdentityLink}表示某个身份（例如组或用户）
+	*为某个过程定义授权
+   */
+  List<IdentityLink> getIdentityLinksForProcessDefinition(String processDefinitionId);
+  
+  /**
+   * 根据执行流程定义的规则验证给定的流程定义
+	*在Activiti引擎上。
+	*要从字符串创建这样的{@link BpmnModel}，可以使用以下代码：
+   * XMLInputFactory xif = XMLInputFactory.newInstance();
+   * InputStreamReader in = new InputStreamReader(new ByteArrayInputStream(myProcess.getBytes()), "UTF-8"); // Change to other streams for eg from classpath
+   * XMLStreamReader xtr = xif.createXMLStreamReader(in);
+   * bpmnModel = new BpmnXMLConverter().convertToBpmnModel(xtr);
+   * 
+   */
+  List<ValidationError> validateProcess(BpmnModel bpmnModel);
+
+}
